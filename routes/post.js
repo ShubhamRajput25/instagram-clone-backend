@@ -7,6 +7,7 @@ const { jwt_secret } = require('../keys');
 const { post, param } = require('.');
 const posts = mongoose.model('post')
 const comments = mongoose.model('comment')
+const replys = mongoose.model('reply')
 
 router.post('/createpost',requireLogin,function(req,res,next){
     console.log("body",req.body)
@@ -140,7 +141,13 @@ router.post('/fetch-comment-by-post',requireLogin,async function(req,res,next){
                             .sort({createdAt:-1})
                             .skip((pageNumber - 1) * 15)
                             .limit(15)
-                            .populate('postedby');
+                            .populate('postedby')
+                            .populate({
+                                path:'replies',
+                                populate: {
+                                    path: 'replyBy replyTo'
+                                  }
+                            });
 
         if(result){
             return res.status(200).json({data:result,status:true,message:"Fetch Comment succussfully"})
@@ -243,16 +250,46 @@ router.post('/unlike-comment',requireLogin,async function(req,res,next){
     }
 })
 
-router.post('add-reply-on-comment',requireLogin,async function(){
+router.post('/add-reply-on-comment',requireLogin,async function(req,res,next){
+    console.log("call")
     try{
-       const {commentId} = req.body
+       const {commentId, replyTo, reply} = req.body
+        
+       let findComment = await comments.findOne({_id:commentId})
 
+       if(!findComment){
+        console.log("comment hai")
+        return res.status(200).json({data:[],status:false,message:"comment Doesn't Exist"})
+       }
+       
+       let saveReply = await replys.create({
+        commentId:commentId,
+        replyTo: replyTo,
+        replyBy:req?.user?._id,
+        reply:reply
+       })
+
+       if(saveReply){
+        console.log("reply save ho gya")
+        let result = await comments.updateOne({_id:commentId},{$push:{replies:saveReply?._id}},{new:true})
+
+        if(result){
+            return res.status(200).json({data:[],status:true,message:"add reply to comment succussfully"})
+        }else{
+            return res.status(200).json({data:[],status:false,message:"Failed To add reply to Comment"})
+        }
+
+       }else{
+        console.log("save nhi hua reply")
+        return res.status(200).json({data:[],status:false,message:"faild to add reply"})
+       }
        
     } catch(e){
         console.log(e)
         res.status(200).json({data:[],status:false,message:"server error"})
     }
 })
+
 
 
 module.exports = router

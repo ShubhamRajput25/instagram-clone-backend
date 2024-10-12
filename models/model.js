@@ -2,25 +2,37 @@ const mongoose=require("mongoose");
 const {ObjectId} = mongoose.Schema.Types
 
 const replySchema = new mongoose.Schema({
-    commentId:{
-        type:ObjectId,
-        ref:'comment'
+    commentId: {
+        type: ObjectId,
+        ref: 'comment',  // Reference to the comment being replied to
+        required: true
     },
-   replyData:[{
-    replyTo:{
-        type:ObjectId,
-        ref:'user'
+    replyTo: {
+        type: ObjectId,
+        ref: 'user',     // Reference to the user the reply is directed to
+        required: true
     },
-    replyBy:{
-        type:ObjectId,
-        ref:'user'
+    replyBy: {
+        type: ObjectId,
+        ref: 'user',     // Reference to the user who is replying
+        required: true
     },
-    reply:{
-        type:String,
-        require:false,
-        default:''
+    reply: {
+        type: String,
+        required: true   // Ensure that the reply text is mandatory
+    },
+    likes: [{
+        type: ObjectId,
+        ref: 'user'      // Users who liked the reply
+    }],
+    unlikes: [{
+        type: ObjectId,
+        ref: 'user'      // Users who disliked the reply
+    }],
+    createdAt: {
+        type: Date,
+        default: Date.now // Auto-set the timestamp when reply is created
     }
-   }]
 })
 
 const commentSchema = new mongoose.Schema({
@@ -35,6 +47,10 @@ const commentSchema = new mongoose.Schema({
     comment:{
      type:String
     },
+    replies: [{
+        type: ObjectId,
+        ref: 'reply'  // Reference to the replies on this comment
+    }],
     createdAt: {
      type: Date,
      default: Date.now
