@@ -9,30 +9,62 @@ const posts = mongoose.model('post')
 const comments = mongoose.model('comment')
 const replys = mongoose.model('reply')
 
-router.post('/createpost',requireLogin,function(req,res,next){
-    console.log("body",req.body)
-    const {body,picture} = req.body
+const cloudinary = require('cloudinary').v2;
 
-    if(!body||!picture){
-    return  res.status(422).json({ error: "pls add all the fields" })
-    }
-   // req.user
+// router.post('/createpost',requireLogin,function(req,res,next){
+//     console.log("body",req.body)
+//     const {body,picture} = req.body
 
-    console.log("ok") 
+//     if(!body||!picture){
+//     return  res.status(422).json({ error: "pls add all the fields" })
+//     }
+//    // req.user
 
-//    const post = new posts({
-//     body,
-//     picture,  
-//     postedby:req.user
-//    })
+//     console.log("ok") 
+
+// //    const post = new posts({
+// //     body,
+// //     picture,  
+// //     postedby:req.user
+// //    })
  
-   posts.insertMany({body:body,picture:picture,postedby:req.user}).then((post)=>{
-    // console.log("post hooo gyiiiii",post)
-    return  res.status(200).json({status:true,message:'submit successfully'})
-   })
-   .catch(err => { console.log(err) })
+//    posts.insertMany({body:body,picture:picture,postedby:req.user}).then((post)=>{
+//     // console.log("post hooo gyiiiii",post)
+//     return  res.status(200).json({status:true,message:'submit successfully'})
+//    })
+//    .catch(err => { console.log(err) })
 
-})
+// })
+
+router.post('/createpost', requireLogin, async (req, res) => {
+    try {
+        console.log("Request Body Received:", req.body);  // Log the received data
+        const { body, picture, video } = req.body;
+
+        // Check if body and either picture or video is provided
+        if (!body || (!picture && !video)) {
+            console.log("Missing fields"); // Log if fields are missing
+            return res.status(422).json({ error: "Please add all the fields" });
+        }
+
+        const userId = req.user._id;
+        const post = new posts({
+            body: body,
+            picture: picture || "",
+            video: video || "",
+            postedby: userId
+        });
+
+        const savedPost = await post.save();
+        console.log("Post created successfully", savedPost);  // Log the created post
+        return res.status(200).json({ status: true, message: 'Post submitted successfully', post: savedPost });
+    } catch (err) {
+        console.error("Error creating post:", err);
+        return res.status(500).json({ status: false, error: "Internal server error" });
+    }
+});
+
+
 
 router.post('/fetchpost',requireLogin,async function(req,res,next){
     // console.log("jjjjjjjjjjjjjjjjjjjjjjjjjjjj")
@@ -188,6 +220,17 @@ router.delete('/deletePost/:postId',requireLogin,async function(req,res,next){
             return res.status(200).json({data:[],status:false,message:"User Not Autherized"})
         }
 
+         // Delete from Cloudinary
+         if (post.picture) {
+            const picturePublicId = post.picture.split('/').pop().split('.')[0];
+            await cloudinary.uploader.destroy(picturePublicId);
+        }
+
+        if (post.video) {
+            const videoPublicId = post.video.split('/').pop().split('.')[0];
+            await cloudinary.uploader.destroy(videoPublicId);
+        }
+
         let result = await posts.deleteOne({_id:postId})
         // console.log(result)
         if(result){
@@ -251,14 +294,12 @@ router.post('/unlike-comment',requireLogin,async function(req,res,next){
 })
 
 router.post('/add-reply-on-comment',requireLogin,async function(req,res,next){
-    console.log("call")
     try{
        const {commentId, replyTo, reply} = req.body
         
        let findComment = await comments.findOne({_id:commentId})
 
        if(!findComment){
-        console.log("comment hai")
         return res.status(200).json({data:[],status:false,message:"comment Doesn't Exist"})
        }
        
@@ -270,7 +311,6 @@ router.post('/add-reply-on-comment',requireLogin,async function(req,res,next){
        })
 
        if(saveReply){
-        console.log("reply save ho gya")
         let result = await comments.updateOne({_id:commentId},{$push:{replies:saveReply?._id}},{new:true})
 
         if(result){
@@ -285,6 +325,56 @@ router.post('/add-reply-on-comment',requireLogin,async function(req,res,next){
        }
        
     } catch(e){
+        console.log(e)
+        res.status(200).json({data:[],status:false,message:"server error"})
+    }
+})
+
+router.post('/like-reply',requireLogin,async function(req,res,next){
+    try{
+
+        const {replyId} = req.body
+
+        let findReply = await replys.find({_id:replyId})
+
+        if(!findReply){
+            return res.status(200).json({data:[],status:false,message:"Reply Doesn't Exist"})
+        }
+
+        let result = await replys.updateOne({_id:replyId},{$addToSet:{likes:req.user._id}},{new:true})
+
+        if(result){
+            return res.status(200).json({data:[],status:true,message:"like Reply succussfully"})
+        }else{
+            return res.status(200).json({data:[],status:false,message:"Failed To Like To reply"})
+        }
+
+    }catch(e){
+        console.log(e)
+        res.status(200).json({data:[],status:false,message:"server error"})
+    }
+})
+
+router.post('/unlike-reply',requireLogin,async function(req,res,next){
+    try{
+
+        const {replyId} = req.body
+
+        let findReply = await replys.find({_id:replyId})
+
+        if(!findReply){
+            return res.status(200).json({data:[],status:false,message:"Reply Doesn't Exist"})
+        }
+
+        let result = await replys.updateOne({_id:replyId},{$pull:{likes:req.user._id}},{new:true})
+
+        if(result){
+            return res.status(200).json({data:[],status:true,message:"unlike Reply succussfully"})
+        }else{
+            return res.status(200).json({data:[],status:false,message:"Failed To UnLike To reply"})
+        }
+
+    }catch(e){
         console.log(e)
         res.status(200).json({data:[],status:false,message:"server error"})
     }

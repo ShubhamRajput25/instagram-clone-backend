@@ -120,6 +120,10 @@ const postSchema=new mongoose.Schema({
         type:String,
         default:""
     },
+    video: {
+        type: String,
+        default: ""
+    },
     postedby:{
         type:ObjectId,
         ref:"user"
